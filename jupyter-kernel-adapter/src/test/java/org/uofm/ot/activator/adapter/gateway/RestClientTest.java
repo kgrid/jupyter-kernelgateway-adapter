@@ -110,7 +110,7 @@ public class RestClientTest {
 
     @Before
     public void setupInaccessible() {
-      URI nonExistantHost = URI.create("nonexistant.host:8888");
+      URI nonExistantHost = URI.create("http://nonexistant.host:8888");
       client = new RestClient(nonExistantHost);
       restTemplate = client.restTemplate;
       mockServer = MockRestServiceServer.bindTo(restTemplate).build();
@@ -118,7 +118,7 @@ public class RestClientTest {
 
     @Test
     public void kernelsInaccessible() throws Exception {
-      mockServer.expect(requestTo("http://localhost:8888/api/kernels"))
+      mockServer.expect(requestTo("http://nonexistant.host:8888/api/kernels"))
           .andExpect(method(HttpMethod.GET))
           .andRespond(withBadRequest());
       List<KernelMetadata> kernels = client.getKernels();

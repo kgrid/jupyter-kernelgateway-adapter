@@ -11,9 +11,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.uofm.ot.activator.adapter.gateway.KernelMetadata;
 import org.uofm.ot.activator.adapter.gateway.RestClient;
+import org.uofm.ot.activator.adapter.gateway.SessionMetadata;
 import org.uofm.ot.activator.adapter.gateway.SockPuppet;
 import org.uofm.ot.activator.adapter.gateway.SockResponseProcessor;
-import org.uofm.ot.activator.adapter.gateway.WebSockHeader;
 import org.uofm.ot.activator.exception.OTExecutionStackException;
 
 @Component
@@ -23,14 +23,16 @@ public class JupyterKernelAdapter implements ServiceAdapter {
   public SockPuppet sockClient;
   public SockResponseProcessor msgProcessor;
 
-  @Value("${ipython.kernelgateway.host}")
-  public String host;
-  @Value("${ipython.kernelgateway.port}")
-  public String port;
+  //@Value("${ipython.kernelgateway.host}")
+  @Value("${host}")
+  public String host = "localhost";
+  //@Value("${ipython.kernelgateway.port}")
+  @Value("${port}")
+  public String port = "8888";
   @Value("${ipython.kernelgateway.maxDuration}")
-  long maxDuration;
+  long maxDuration = 10_000_000_000L;
   @Value("${ipython.kernelgateway.pollInterval}")
-  long pollInterval;
+  long pollInterval = 50_000_000;
 
   public JupyterKernelAdapter() {
     URI restUri = URI.create("http://" + host + ":" + port);
@@ -55,25 +57,31 @@ public class JupyterKernelAdapter implements ServiceAdapter {
       throw new OTExecutionStackException(" No available Jupyter Kernel for payload ");
     }
 
+    // Get a Session
+    SessionMetadata sessionMd = restClient.startSession(selectedKernel);
+
     // Connect to WebSocket
     URI sockUri = URI.create(
         String.format("ws://%s:%s/api/kernels/%s/channels", host, port, selectedKernel.getId()));
     sockClient.connectToServer(sockUri);
 
     // Send code to allow JSON output from IPython kernel:
-    sockClient.sendPayload("from IPython.display import JSON");
+    sockClient.sendPayload("from IPython.display import JSON", sessionMd.getId());
 
     // Send knowledge object function code to the kernel
-    WebSockHeader reqHeader = sockClient.sendPayload(code);
+    sockClient.sendPayload(code, sessionMd.getId());
 
     // Send payload to call the kobject function
-    sockClient.sendPayload(buildCallingPayload(args, functionName));
+    sockClient.sendPayload(buildCallingPayload(args, functionName), sessionMd.getId());
 
     // Instruct IPython to serialize the result as json
-    sockClient.sendPayload("JSON(result)");
+    sockClient.sendPayload("JSON(result)", sessionMd.getId());
 
     // Poll for responses
     msgProcessor.beginProcessing(maxDuration, pollInterval);
+
+    // Terminate session
+    //restClient
 
     if (msgProcessor.encounteredError()) {
       throw new OTExecutionStackException(
@@ -132,6 +140,7 @@ public class JupyterKernelAdapter implements ServiceAdapter {
   public List<String> supports() {
     List<String> languages = new ArrayList<>();
     languages.add("Python");
+    languages.add("Python3");
     return languages;
   }
 }

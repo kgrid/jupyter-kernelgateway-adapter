@@ -4,7 +4,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -40,17 +43,15 @@ public class RestClient {
   }
 
   public List<KernelMetadata> getKernels() {
-    List<KernelMetadata> list = new ArrayList<>();
     List<KernelMetadata> kernels = new ArrayList<>();
     try {
-      URI targetUri = new URI("http://localhost:8888/api/kernels");
-      //list = restTemplate.getForObject(targetUri, ArrayList.class);
+      URI targetUri = restURI.resolve("/api/kernels");
       ResponseEntity<List<KernelMetadata>> kernelsResponse =
           restTemplate.exchange(targetUri,
               HttpMethod.GET, null, new ParameterizedTypeReference<List<KernelMetadata>>() {
               });
       kernels = kernelsResponse.getBody();
-    } catch (URISyntaxException | HttpClientErrorException | ResourceAccessException e) {
+    } catch (HttpClientErrorException | ResourceAccessException e) {
       System.out.println(e.getMessage());
     }
 
@@ -59,13 +60,37 @@ public class RestClient {
 
   public KernelMetadata startKernel() {
     KernelMetadata resp = null;
+    URI targetUri = restURI.resolve("/api/kernels");
     try {
-      URI targetUri = new URI("http://localhost:8888/api/kernels");
       String request = "{\"name\": \"python\"}";
       resp = restTemplate.postForObject(targetUri, request, KernelMetadata.class);
-    } catch (URISyntaxException | HttpClientErrorException | ResourceAccessException e) {
+    } catch (HttpClientErrorException | ResourceAccessException e) {
       System.out.println(e.getMessage());
     }
     return resp;
+  }
+
+  public SessionMetadata startSession(KernelMetadata kernelMd) {
+    SessionMetadata resp = null;
+    URI targetUri = restURI.resolve("/api/sessions");
+    try {
+      Map<String, Object> body = new LinkedHashMap<>();
+      body.put("path", UUID.randomUUID().toString());
+      body.put("type", "kernelgateway");
+      body.put("kernel", kernelMd);
+      resp = restTemplate.postForObject(targetUri, body, SessionMetadata.class);
+    } catch (HttpClientErrorException | ResourceAccessException e) {
+      System.out.println(e.getMessage());
+    }
+    return resp;
+  }
+
+  public void deleteSession(SessionMetadata sessMd){
+    URI targetUri = restURI.resolve("/api/sessions/"+sessMd.getId());
+    try {
+      restTemplate.delete(targetUri);
+    } catch (HttpClientErrorException | ResourceAccessException e) {
+      System.out.println(e.getMessage());
+    }
   }
 }

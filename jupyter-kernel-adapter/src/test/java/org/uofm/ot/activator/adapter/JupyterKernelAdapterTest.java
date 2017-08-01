@@ -17,10 +17,12 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.InjectMocks;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.uofm.ot.activator.adapter.gateway.KernelMetadata;
 import org.uofm.ot.activator.adapter.gateway.RestClient;
+import org.uofm.ot.activator.adapter.gateway.SessionMetadata;
 import org.uofm.ot.activator.adapter.gateway.SockPuppet;
 import org.uofm.ot.activator.adapter.gateway.SockResponseProcessor;
 import org.uofm.ot.activator.exception.OTExecutionStackException;
@@ -54,6 +56,7 @@ public class JupyterKernelAdapterTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+    when(restClient.startSession(Matchers.any(KernelMetadata.class))).thenReturn(buildGoodSession());
     jupyterKernelAdapter.pollInterval = 50_000_000L;
     jupyterKernelAdapter.maxDuration = 10_000_000_000L;
     jupyterKernelAdapter.host = "localhost";
@@ -70,6 +73,13 @@ public class JupyterKernelAdapterTest {
     goodKernel.setId("test-id");
 
     return goodKernel;
+  }
+
+  private SessionMetadata buildGoodSession() {
+    SessionMetadata goodSess = new SessionMetadata();
+    goodSess.setId(("test-session-id"));
+
+    return goodSess;
   }
 
   //
