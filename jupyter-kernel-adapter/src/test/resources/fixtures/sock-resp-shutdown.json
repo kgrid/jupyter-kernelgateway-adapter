@@ -1,0 +1,27 @@
+{
+    "buffers": [],
+    "channel": "iopub",
+    "content": {
+        "restart": false,
+        "status": "ok"
+    },
+    "header": {
+        "date": "2017-08-02T13:39:11.210339Z",
+        "msg_id": "8d150903-52aadae40b7892582d4c53ae",
+        "msg_type": "shutdown_reply",
+        "session": "1ceccbec-8b0854f1ca91b5372223eac3",
+        "username": "grosscol",
+        "version": "5.1"
+    },
+    "metadata": {},
+    "msg_id": "8d150903-52aadae40b7892582d4c53ae",
+    "msg_type": "shutdown_reply",
+    "parent_header": {
+        "date": "2017-08-02T13:39:11.205954Z",
+        "msg_id": "d4091a8c-ace97097cfbaed44ec4f1f39",
+        "msg_type": "shutdown_request",
+        "session": "ac5b115d-7b7c16d7a2b7bac2462a6bba",
+        "username": "grosscol",
+        "version": "5.1"
+    }
+}

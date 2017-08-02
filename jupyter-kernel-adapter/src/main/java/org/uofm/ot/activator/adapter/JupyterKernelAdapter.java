@@ -22,8 +22,6 @@ import org.uofm.ot.activator.exception.OTExecutionStackException;
 public class JupyterKernelAdapter implements ServiceAdapter {
 
   public RestClient restClient;
-  //public SockPuppet sockClient;
-  //public SockResponseProcessor msgProcessor;
 
   @Value("${ipython.kernelgateway.host}")
   public String host = "localhost";
@@ -37,8 +35,6 @@ public class JupyterKernelAdapter implements ServiceAdapter {
   public JupyterKernelAdapter() {
     URI restUri = URI.create("http://" + host + ":" + port);
     restClient = new RestClient(restUri);
-    //sockClient = new SockPuppet();
-    //msgProcessor = new SockResponseProcessor(sockClient.getMessageQ());
   }
 
   public Object execute(Map<String, Object> args, String code, String functionName,
@@ -62,7 +58,8 @@ public class JupyterKernelAdapter implements ServiceAdapter {
     SessionMetadata sessionMd = restClient.startSession(selectedKernel);
 
     // Do web socket work and return a reference to the message que to be parsed.
-    ArrayBlockingQueue<WebSockMessage> messageQ = executeViaWebSock(sessionMd, code, args, functionName);
+    String payload = buildPayload(code,functionName,args);
+    ArrayBlockingQueue<WebSockMessage> messageQ = executeViaWebSock(sessionMd, payload);
     SockResponseProcessor msgProcessor = new SockResponseProcessor(messageQ);
 
     // Poll (if required) for responses
@@ -84,30 +81,40 @@ public class JupyterKernelAdapter implements ServiceAdapter {
     return msgProcessor.getResult();
   }
 
-  public ArrayBlockingQueue<WebSockMessage> executeViaWebSock(SessionMetadata sessMd, String code, Map<String, Object> args, String functionName){
+  // Build resulting payload as single large string
+  String buildPayload( String code, String functionName, Map<String, Object> args){
+    StringBuilder sb = new StringBuilder();
+    sb.append("from IPython.display import JSON")
+        .append("\n")
+        .append(code)
+        .append("\n")
+        .append(buildCallingPayload(args, functionName))
+        .append("\n")
+        .append("JSON(result)");
+
+    return sb.toString();
+  }
+
+  public ArrayBlockingQueue<WebSockMessage> executeViaWebSock(SessionMetadata sessMd, String payload){
     // Start a new web socket client and message processor
     SockPuppet sockClient = new SockPuppet();
 
     // Connect to WebSocket
-    String kernelId = sessMd.getKernel().getId();
-    URI sockUri = URI.create(
-        String.format("ws://%s:%s/api/kernels/%s/channels", host, port, kernelId));
+    URI sockUri = webSocketURI(sessMd.getKernel().getId());
     sockClient.connectToServer(sockUri);
 
-    // Send code to allow JSON output from IPython kernel:
-    sockClient.sendPayload("from IPython.display import JSON", sessMd.getId());
-
-    // Send knowledge object function code to the kernel
-    sockClient.sendPayload(code, sessMd.getId());
-
-    // Send payload to call the kobject function
-    sockClient.sendPayload(buildCallingPayload(args, functionName), sessMd.getId());
-
-    // Instruct IPython to serialize the result as json
-    sockClient.sendPayload("JSON(result)", sessMd.getId());
+    // Send payload
+    sockClient.sendPayload(payload, sessMd.getId());
 
     //return reference to the WebSocket message queue
     return sockClient.getMessageQ();
+  }
+
+  // Create Websocket URI
+  public URI webSocketURI(String kernelId){
+    URI uri = URI.create(
+        String.format("ws://%s:%s/api/kernels/%s/channels", host, port, kernelId));
+    return uri;
   }
 
   // To which kernel should the code be sent?

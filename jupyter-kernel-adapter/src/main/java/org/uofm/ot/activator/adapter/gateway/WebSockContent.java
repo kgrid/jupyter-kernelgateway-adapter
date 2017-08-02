@@ -38,6 +38,8 @@ public class WebSockContent {
   @JsonProperty
   public String name;
   @JsonProperty
+  public boolean restart;
+  @JsonProperty
   public Map<String, Object> data;
 
   // Error message fields

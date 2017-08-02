@@ -2,6 +2,7 @@ package org.uofm.ot.activator.adapter;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsSame.sameInstance;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -25,6 +27,7 @@ import org.uofm.ot.activator.adapter.gateway.RestClient;
 import org.uofm.ot.activator.adapter.gateway.SessionMetadata;
 import org.uofm.ot.activator.adapter.gateway.SockPuppet;
 import org.uofm.ot.activator.adapter.gateway.SockResponseProcessor;
+import org.uofm.ot.activator.adapter.gateway.WebSockMessage;
 import org.uofm.ot.activator.exception.OTExecutionStackException;
 
 /**
@@ -38,8 +41,8 @@ public class JupyterKernelAdapterTest {
   @Mock(name = "restClient")
   private RestClient restClient = mock(RestClient.class);
 
-  @Mock(name = "sockClient")
-  private SockPuppet sockClient = mock(SockPuppet.class);
+  //@Mock(name = "sockClient")
+  //private SockPuppet sockClient = mock(SockPuppet.class);
 
   @Mock(name = "msgProcessor")
   private SockResponseProcessor msgProcessor = mock(SockResponseProcessor.class);
@@ -53,14 +56,23 @@ public class JupyterKernelAdapterTest {
   private String funcName;
   private Class resultClass;
 
+  private KernelMetadata goodKernel;
+  private SessionMetadata goodSession;
+
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    when(restClient.startSession(Matchers.any(KernelMetadata.class))).thenReturn(buildGoodSession());
+
+    goodKernel = buildGoodKernel();
+    goodSession = buildGoodSession();
+
+    when(restClient.startSession(any(KernelMetadata.class))).thenReturn(goodSession);
+
     jupyterKernelAdapter.pollInterval = 50_000_000L;
     jupyterKernelAdapter.maxDuration = 10_000_000_000L;
     jupyterKernelAdapter.host = "localhost";
     jupyterKernelAdapter.port = "8888";
+
     argMap = new HashMap<>();
     payload = "def exec(a):\n    return {\"value\": 1}";
     funcName = "exec";
@@ -78,9 +90,15 @@ public class JupyterKernelAdapterTest {
   private SessionMetadata buildGoodSession() {
     SessionMetadata goodSess = new SessionMetadata();
     goodSess.setId(("test-session-id"));
+    goodSess.setKernel(buildGoodKernel());
 
     return goodSess;
   }
+
+  //
+  // Test Payload Construction
+  // TODO make IPythonPayloadBuilder class
+
 
   //
   // Test Kernel Discovery
@@ -88,12 +106,13 @@ public class JupyterKernelAdapterTest {
 
   @Test
   public void connectToDiscoveredKernel() throws Exception {
-    when(restClient.getKernels()).thenReturn(Collections.singletonList(buildGoodKernel()));
+    when(restClient.getKernels()).thenReturn(Collections.singletonList(goodKernel));
+    when(jupyterKernelAdapter.executeViaWebSock(any(SessionMetadata.class), any(String.class))).thenReturn(new ArrayBlockingQueue<WebSockMessage>(2));
 
     jupyterKernelAdapter.execute(argMap, payload, funcName, resultClass);
 
     URI expectedUri = URI.create("ws://localhost:8888/api/kernels/test-id/channels");
-    verify(sockClient).connectToServer(expectedUri);
+    verify(jupyterKernelAdapter).webSocketURI(goodKernel.getId());
   }
 
   @Test
