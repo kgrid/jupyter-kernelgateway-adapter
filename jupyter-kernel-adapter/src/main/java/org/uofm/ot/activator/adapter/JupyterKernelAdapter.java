@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ArrayBlockingQueue;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.uofm.ot.activator.adapter.gateway.KernelMetadata;
@@ -14,20 +15,19 @@ import org.uofm.ot.activator.adapter.gateway.RestClient;
 import org.uofm.ot.activator.adapter.gateway.SessionMetadata;
 import org.uofm.ot.activator.adapter.gateway.SockPuppet;
 import org.uofm.ot.activator.adapter.gateway.SockResponseProcessor;
+import org.uofm.ot.activator.adapter.gateway.WebSockMessage;
 import org.uofm.ot.activator.exception.OTExecutionStackException;
 
 @Component
 public class JupyterKernelAdapter implements ServiceAdapter {
 
   public RestClient restClient;
-  public SockPuppet sockClient;
-  public SockResponseProcessor msgProcessor;
+  //public SockPuppet sockClient;
+  //public SockResponseProcessor msgProcessor;
 
-  //@Value("${ipython.kernelgateway.host}")
-  @Value("${host}")
+  @Value("${ipython.kernelgateway.host}")
   public String host = "localhost";
-  //@Value("${ipython.kernelgateway.port}")
-  @Value("${port}")
+  @Value("${ipython.kernelgateway.port}")
   public String port = "8888";
   @Value("${ipython.kernelgateway.maxDuration}")
   long maxDuration = 10_000_000_000L;
@@ -37,13 +37,14 @@ public class JupyterKernelAdapter implements ServiceAdapter {
   public JupyterKernelAdapter() {
     URI restUri = URI.create("http://" + host + ":" + port);
     restClient = new RestClient(restUri);
-    sockClient = new SockPuppet();
-    msgProcessor = new SockResponseProcessor(sockClient.getMessageQ());
+    //sockClient = new SockPuppet();
+    //msgProcessor = new SockResponseProcessor(sockClient.getMessageQ());
   }
 
   public Object execute(Map<String, Object> args, String code, String functionName,
       Class returnType)
       throws OTExecutionStackException {
+    // Validate args
     if (code == null || code.isEmpty()) {
       throw new OTExecutionStackException(" No code to execute ");
     }
@@ -60,29 +61,17 @@ public class JupyterKernelAdapter implements ServiceAdapter {
     // Get a Session
     SessionMetadata sessionMd = restClient.startSession(selectedKernel);
 
-    // Connect to WebSocket
-    URI sockUri = URI.create(
-        String.format("ws://%s:%s/api/kernels/%s/channels", host, port, selectedKernel.getId()));
-    sockClient.connectToServer(sockUri);
+    // Do web socket work and return a reference to the message que to be parsed.
+    ArrayBlockingQueue<WebSockMessage> messageQ = executeViaWebSock(sessionMd, code, args, functionName);
+    SockResponseProcessor msgProcessor = new SockResponseProcessor(messageQ);
 
-    // Send code to allow JSON output from IPython kernel:
-    sockClient.sendPayload("from IPython.display import JSON", sessionMd.getId());
-
-    // Send knowledge object function code to the kernel
-    sockClient.sendPayload(code, sessionMd.getId());
-
-    // Send payload to call the kobject function
-    sockClient.sendPayload(buildCallingPayload(args, functionName), sessionMd.getId());
-
-    // Instruct IPython to serialize the result as json
-    sockClient.sendPayload("JSON(result)", sessionMd.getId());
-
-    // Poll for responses
+    // Poll (if required) for responses
     msgProcessor.beginProcessing(maxDuration, pollInterval);
 
     // Terminate session
-    //restClient
+    restClient.deleteSession(sessionMd);
 
+    // Check response for error or timeout
     if (msgProcessor.encounteredError()) {
       throw new OTExecutionStackException(
           "Error in exec environment: " + msgProcessor.getErrorMsg());
@@ -91,7 +80,34 @@ public class JupyterKernelAdapter implements ServiceAdapter {
           "Timeout occurred. Max duration reached before result returned.");
     }
 
+    // Return result
     return msgProcessor.getResult();
+  }
+
+  public ArrayBlockingQueue<WebSockMessage> executeViaWebSock(SessionMetadata sessMd, String code, Map<String, Object> args, String functionName){
+    // Start a new web socket client and message processor
+    SockPuppet sockClient = new SockPuppet();
+
+    // Connect to WebSocket
+    String kernelId = sessMd.getKernel().getId();
+    URI sockUri = URI.create(
+        String.format("ws://%s:%s/api/kernels/%s/channels", host, port, kernelId));
+    sockClient.connectToServer(sockUri);
+
+    // Send code to allow JSON output from IPython kernel:
+    sockClient.sendPayload("from IPython.display import JSON", sessMd.getId());
+
+    // Send knowledge object function code to the kernel
+    sockClient.sendPayload(code, sessMd.getId());
+
+    // Send payload to call the kobject function
+    sockClient.sendPayload(buildCallingPayload(args, functionName), sessMd.getId());
+
+    // Instruct IPython to serialize the result as json
+    sockClient.sendPayload("JSON(result)", sessMd.getId());
+
+    //return reference to the WebSocket message queue
+    return sockClient.getMessageQ();
   }
 
   // To which kernel should the code be sent?
