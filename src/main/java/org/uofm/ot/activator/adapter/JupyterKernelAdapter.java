@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ArrayBlockingQueue;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.uofm.ot.activator.adapter.gateway.KernelMetadata;
@@ -15,7 +14,6 @@ import org.uofm.ot.activator.adapter.gateway.RestClient;
 import org.uofm.ot.activator.adapter.gateway.SessionMetadata;
 import org.uofm.ot.activator.adapter.gateway.SockPuppet;
 import org.uofm.ot.activator.adapter.gateway.SockResponseProcessor;
-import org.uofm.ot.activator.adapter.gateway.WebSockMessage;
 import org.uofm.ot.activator.exception.OTExecutionStackException;
 
 @Component
@@ -25,14 +23,14 @@ public class JupyterKernelAdapter implements ServiceAdapter {
   public SockPuppet sockClient;
   public SockResponseProcessor msgProcessor;
 
-  @Value("${ipython.kernelgateway.host}")
-  public String host = "localhost";
-  @Value("${ipython.kernelgateway.port}")
-  public String port = "8888";
-  @Value("${ipython.kernelgateway.maxDuration}")
-  long maxDuration = 10_000_000_000L;
-  @Value("${ipython.kernelgateway.pollInterval}")
-  long pollInterval = 50_000_000;
+  @Value("${ipython.kernelgateway.host:localhost}")
+  public String host;
+  @Value("${ipython.kernelgateway.port:8888}")
+  public String port;
+  @Value("${ipython.kernelgateway.maxDuration:10000000000}")
+  long maxDuration;
+  @Value("${ipython.kernelgateway.pollInterval:50000000}")
+  long pollInterval;
 
   public JupyterKernelAdapter() {
     URI restUri = URI.create("http://" + host + ":" + port);
@@ -62,7 +60,7 @@ public class JupyterKernelAdapter implements ServiceAdapter {
     SessionMetadata sessionMd = restClient.startSession(selectedKernel);
 
     // Do web socket work and return a reference to the message que to be parsed.
-    String payload = buildPayload(code,functionName,args);
+    String payload = buildPayload(code, functionName, args);
     executeViaWebSock(sessionMd, payload);
 
     // Poll (if required) for responses
@@ -85,7 +83,7 @@ public class JupyterKernelAdapter implements ServiceAdapter {
   }
 
   // Build resulting payload as single large string
-  String buildPayload( String code, String functionName, Map<String, Object> args){
+  String buildPayload(String code, String functionName, Map<String, Object> args) {
     StringBuilder sb = new StringBuilder();
     sb.append("from IPython.display import JSON")
         .append("\n")
@@ -98,7 +96,7 @@ public class JupyterKernelAdapter implements ServiceAdapter {
     return sb.toString();
   }
 
-  public void executeViaWebSock(SessionMetadata sessMd, String payload){
+  public void executeViaWebSock(SessionMetadata sessMd, String payload) {
     // Connect to WebSocket
     URI sockUri = webSocketURI(sessMd.getKernel().getId());
     sockClient.connectToServer(sockUri);
@@ -106,7 +104,7 @@ public class JupyterKernelAdapter implements ServiceAdapter {
     sockClient.sendPayload(payload, sessMd.getId());
   }
 
-  public URI webSocketURI(String kernelId){
+  public URI webSocketURI(String kernelId) {
     URI uri = URI.create(
         String.format("ws://%s:%s/api/kernels/%s/channels", host, port, kernelId));
     return uri;

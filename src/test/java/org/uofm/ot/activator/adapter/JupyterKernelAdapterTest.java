@@ -13,13 +13,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.InjectMocks;
-import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.uofm.ot.activator.adapter.gateway.KernelMetadata;
@@ -27,7 +25,6 @@ import org.uofm.ot.activator.adapter.gateway.RestClient;
 import org.uofm.ot.activator.adapter.gateway.SessionMetadata;
 import org.uofm.ot.activator.adapter.gateway.SockPuppet;
 import org.uofm.ot.activator.adapter.gateway.SockResponseProcessor;
-import org.uofm.ot.activator.adapter.gateway.WebSockMessage;
 import org.uofm.ot.activator.exception.OTExecutionStackException;
 
 /**
@@ -98,7 +95,6 @@ public class JupyterKernelAdapterTest {
   //
   // Test Payload Construction
   // TODO make IPythonPayloadBuilder class
-
 
   //
   // Test Kernel Discovery
