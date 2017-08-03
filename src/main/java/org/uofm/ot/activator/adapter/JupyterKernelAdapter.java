@@ -22,6 +22,8 @@ import org.uofm.ot.activator.exception.OTExecutionStackException;
 public class JupyterKernelAdapter implements ServiceAdapter {
 
   public RestClient restClient;
+  public SockPuppet sockClient;
+  public SockResponseProcessor msgProcessor;
 
   @Value("${ipython.kernelgateway.host}")
   public String host = "localhost";
@@ -35,6 +37,8 @@ public class JupyterKernelAdapter implements ServiceAdapter {
   public JupyterKernelAdapter() {
     URI restUri = URI.create("http://" + host + ":" + port);
     restClient = new RestClient(restUri);
+    sockClient = new SockPuppet();
+    msgProcessor = new SockResponseProcessor(sockClient.getMessageQ());
   }
 
   public Object execute(Map<String, Object> args, String code, String functionName,
@@ -59,8 +63,7 @@ public class JupyterKernelAdapter implements ServiceAdapter {
 
     // Do web socket work and return a reference to the message que to be parsed.
     String payload = buildPayload(code,functionName,args);
-    ArrayBlockingQueue<WebSockMessage> messageQ = executeViaWebSock(sessionMd, payload);
-    SockResponseProcessor msgProcessor = new SockResponseProcessor(messageQ);
+    executeViaWebSock(sessionMd, payload);
 
     // Poll (if required) for responses
     msgProcessor.beginProcessing(maxDuration, pollInterval);
@@ -95,22 +98,14 @@ public class JupyterKernelAdapter implements ServiceAdapter {
     return sb.toString();
   }
 
-  public ArrayBlockingQueue<WebSockMessage> executeViaWebSock(SessionMetadata sessMd, String payload){
-    // Start a new web socket client and message processor
-    SockPuppet sockClient = new SockPuppet();
-
+  public void executeViaWebSock(SessionMetadata sessMd, String payload){
     // Connect to WebSocket
     URI sockUri = webSocketURI(sessMd.getKernel().getId());
     sockClient.connectToServer(sockUri);
 
-    // Send payload
     sockClient.sendPayload(payload, sessMd.getId());
-
-    //return reference to the WebSocket message queue
-    return sockClient.getMessageQ();
   }
 
-  // Create Websocket URI
   public URI webSocketURI(String kernelId){
     URI uri = URI.create(
         String.format("ws://%s:%s/api/kernels/%s/channels", host, port, kernelId));

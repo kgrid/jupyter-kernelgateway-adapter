@@ -41,8 +41,8 @@ public class JupyterKernelAdapterTest {
   @Mock(name = "restClient")
   private RestClient restClient = mock(RestClient.class);
 
-  //@Mock(name = "sockClient")
-  //private SockPuppet sockClient = mock(SockPuppet.class);
+  @Mock(name = "sockClient")
+  private SockPuppet sockClient = mock(SockPuppet.class);
 
   @Mock(name = "msgProcessor")
   private SockResponseProcessor msgProcessor = mock(SockResponseProcessor.class);
@@ -107,12 +107,11 @@ public class JupyterKernelAdapterTest {
   @Test
   public void connectToDiscoveredKernel() throws Exception {
     when(restClient.getKernels()).thenReturn(Collections.singletonList(goodKernel));
-    when(jupyterKernelAdapter.executeViaWebSock(any(SessionMetadata.class), any(String.class))).thenReturn(new ArrayBlockingQueue<WebSockMessage>(2));
 
     jupyterKernelAdapter.execute(argMap, payload, funcName, resultClass);
 
     URI expectedUri = URI.create("ws://localhost:8888/api/kernels/test-id/channels");
-    verify(jupyterKernelAdapter).webSocketURI(goodKernel.getId());
+    verify(sockClient).connectToServer(expectedUri);
   }
 
   @Test
